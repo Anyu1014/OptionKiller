@@ -17,7 +17,7 @@ OptionKiller/
 /Users/y/Documents/Codex/2026-11-12/an/outputs/OptionKiller/src/tool/run.sh dev
 ```
 
-访问 http://127.0.0.1:5198 。Node 24 自带 SQLite，不需要 npm 安装。真实账号与题库存储在 `src/.local/optionkiller.sqlite`（Git 忽略）；QA 使用 `.cache/qa.sqlite`。首次使用需注册 OptionKiller 账号，和 NounKiller 不共用数据库或登录会话。
+访问 http://127.0.0.1:5198 。Node 24 自带 SQLite，不需要 npm 安装。真实账号与题库存储在 `src/.local/optionkiller.sqlite`（Git 忽略）；QA 使用 `.cache/qa.sqlite`。首次使用需注册 OptionKiller 账号，和 NounKiller 不共用数据库或登录会话。线上网站： https://optionkiller.yuanhyu1014.workers.dev 。
 
 ## 主要功能
 
@@ -64,6 +64,10 @@ E.选项五
 
 网页产物进入 `build/latest/dist/`；旧网页自动进入 `build/history/<时间>/dist/`。`clean` 只清 `.cache/`，不动源码、依赖、持久数据和交付物。执行 clean 会清除回滚所需的原始参考快照。
 
-原生标识独立为 `com.optionkiller.app`。本轮只准备 Android/iOS 壳与共用业务源码，不生成、安装 APK/IPA；原工程签名密钥、个人团队设置与令牌均未复制。原生打包前要在 `src/web/js/config.js` 设置独立的 HTTPS API 地址，再同步网页资源，配置新签名并做真机验证。私有 Sites 地址带访问门禁，不直接作为原生开放 API。
+## 1.0 发布与账号
 
-生产 Worker 使用 `.openai/hosting.json` 声明的独立 D1 绑定 DB。SMTP 未配置时注册仍可用，但找回密码邮件不可用。PDF/Word/图片 OCR、原生壳与真实设备还需专项验证。
+- 正式网站使用独立 Cloudflare Worker 和 D1；本机服务仍使用本机 SQLite，不共享两者数据，也不改动 NounKiller。
+- Android 和 iOS 安装包使用独立标识 `com.optionkiller.app`，并在本地文件运行时连接上述 HTTPS API。Android 安装包使用独立签名密钥；请安全保管 `android/signing/optionkiller-release.jks` 与本机钥匙串中的签名口令，否则后续更新可能无法覆盖安装。
+- iOS 为开发签名，只能安装到描述文件登记的设备；个人团队描述文件有效期较短，到期需重新签名。
+- 发件邮箱与授权码在 Cloudflare 环境变量 / 密钥中配置，不存入源码。`keep_vars` 保留控制台中维护的变量；未经验证邮箱所有权时，不要通过 `ADMIN_EMAILS` 直接授予管理员。管理员权限已对注册账号单独设置。
+- AI 导入核对默认关闭，开启后会把原始文本和解析文本发给已配置的服务，可能产生费用；图片只传识别出的文本，核对结果需人工确认。文末可用 `参考答案`、`答案汇总` 或 `答案` 加 `1.A 2.AC` 等按题号提供答案。

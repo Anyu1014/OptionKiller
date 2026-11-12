@@ -375,10 +375,10 @@ async function sendMail(env, mail) {
 }
 
 function welcomeMail(email, restored = false) {
-  const link = 'https://optionkiller.pages.dev';
+  const link = 'https://optionkiller.yuanhyu1014.workers.dev';
   const title = restored ? '数据已恢复' : '注册成功';
   const text = [
-    'OptionKiller / 名解斩',
+    'OptionKiller / 选择题练习',
     '',
     restored ? `你的邮箱 ${email} 重新注册成功，云端数据已恢复。` : `你的邮箱 ${email} 已注册成功。`,
     '题库、SRS 进度、划线、收藏和设置会同步到云端，换设备登录即可接着背。',
@@ -405,7 +405,7 @@ function welcomeMail(email, restored = false) {
 function resetMail(env, email, code) {
   const from = mailFrom(env);
   const text = [
-    'OptionKiller / 名解斩',
+    'OptionKiller / 选择题练习',
     '',
     `你的密码重置验证码是：${code}`,
     '验证码 10 分钟内有效，只能使用一次。',

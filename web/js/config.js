@@ -1,2 +1,2 @@
-// Set an HTTPS API origin before packaging native apps; website requests stay same-origin.
-window.OK_API_BASE = window.OK_API_BASE || '';
+// The hosted site uses same-origin requests; native file-based apps use the deployed HTTPS API.
+window.OK_API_BASE = window.OK_API_BASE || (location.protocol === 'file:' ? 'https://optionkiller.yuanhyu1014.workers.dev' : '');
