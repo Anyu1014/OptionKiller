@@ -1,0 +1,22 @@
+node_modules/
+.wrangler/
+.dev.vars
+android/.gradle/
+android/app/build/
+android/app/src/main/assets/www/
+ios/DerivedData/
+ios/OptionKiller/www/
+*.keystore
+.local/
+dist/
+ios/*.xcodeproj/
+ios/OptionKiller/Info.plist
+
+# Local-only build output and credentials
+android/build/
+.env
+.env.*
+*.jks
+*.p12
+*.p8
+*.mobileprovision

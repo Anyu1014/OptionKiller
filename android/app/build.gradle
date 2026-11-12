@@ -1,0 +1,31 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.optionkiller.app'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.optionkiller.app"
+        minSdk 23
+        targetSdk 36
+        versionCode 1
+        versionName "1.0.0"
+        resConfigs "zh", "en"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            // Release signing is configured only when distributing a package.
+        }
+        debug {
+            applicationIdSuffix ".debug"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

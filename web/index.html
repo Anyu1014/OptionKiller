@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="app-version" content="1.0">
+  <meta name="theme-color" content="#4c83ee">
+  <meta name="description" content="OptionKiller —— 导入自己的选择题，练习、复盘与记忆。">
+  <title>OptionKiller · 选择题练习</title>
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/option.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="appbar">
+      <button class="brand" id="brandHome" type="button" aria-label="回到当前题库">
+        <span class="seal" aria-hidden="true">O.</span>
+        <span class="brand-name" id="brandName">OptionKiller</span>
+      </button>
+      <div class="appbar-right">
+        <button class="deck-chip" id="deckBtn" type="button" aria-haspopup="dialog">
+          <span class="deck-chip-label" id="deckName">示例题库</span>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="icon-btn account-btn" id="accountBtn" type="button" aria-label="登录账号" aria-haspopup="dialog">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="6.8" r="2.9" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.4 16.2c.5-3 2.8-4.7 5.6-4.7s5.1 1.7 5.6 4.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+        <button class="icon-btn" id="groupBtn" type="button" aria-label="群组题库" aria-haspopup="dialog">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4.6h9.2v6.1H7.1L4.4 13v-2.3H3Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M13.6 7.5h3.4v6h-1.5v2l-2.5-2h-3.4V10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="icon-btn" id="settingsBtn" type="button" aria-label="设置" aria-haspopup="dialog">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 12.6a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2Z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M16.1 11.2a6.6 6.6 0 0 0 0-2.4l1.5-1.2-1.6-2.8-1.9.7a6.5 6.5 0 0 0-2-1.2L11.9 2H8.1l-.2 2.3a6.5 6.5 0 0 0-2 1.2l-1.9-.7L2.4 7.6l1.5 1.2a6.6 6.6 0 0 0 0 2.4l-1.5 1.2 1.6 2.8 1.9-.7a6.5 6.5 0 0 0 2 1.2l.2 2.3h3.8l.2-2.3a6.5 6.5 0 0 0 2-1.2l1.9.7 1.6-2.8-1.5-1.2Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="study-toolbar">
+      <span class="toolbar-caption"><span id="cardStatus">单选题－A型题</span><span id="cardCounter">第 1 题</span></span>
+      <div><button id="masterBtn" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 15 10-11a2 2 0 0 1 3 0l2 2a2 2 0 0 1 0 3L9 19l-6 2zM14 5l5 5"/></svg><span id="masterLabel">斩题</span></button>
+      <button id="statsBtn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5m0 14h16M7 15l4-5 4 2 5-7"/></svg>统计</button>
+      <button id="draftBtn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4H4v16h16v-8M11 13l1-4 8-7 3 3-8 8z"/></svg>草稿</button></div>
+    </div>
+    <main class="main" id="main">
+      <section class="screen study" id="studyScreen" aria-live="polite">
+        <article class="card" id="card">
+          <div class="term-row">
+            <h1 class="term" id="term"></h1>
+            <button class="fav-btn" id="favBtn" type="button" aria-label="收藏这道题" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4l2.6 5.3 5.8.9-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.9z"/></svg>
+            </button>
+          </div>
+          <div class="answer" id="answer"></div>
+          <div class="answer-tools" id="answerTools" hidden></div>
+        </article>
+
+        <div class="rating" id="ratingBar">
+          <button class="rate-btn unknown" type="button" data-rating="unknown">
+            <span class="rate-key" aria-hidden="true">1</span>
+            <span class="rate-main">不认识</span>
+            <span class="rate-sub">完全没有印象</span>
+          </button>
+          <button class="rate-btn fuzzy" type="button" data-rating="fuzzy">
+            <span class="rate-key" aria-hidden="true">2</span>
+            <span class="rate-main">不熟悉</span>
+            <span class="rate-sub">逐字点亮回忆</span>
+          </button>
+          <button class="rate-btn known" type="button" data-rating="known">
+            <span class="rate-key" aria-hidden="true">3</span>
+            <span class="rate-main">熟悉</span>
+            <span class="rate-sub">能完整讲出来</span>
+          </button>
+        </div>
+
+        <div class="next-row" id="nextRow" hidden></div>
+
+        <div class="session-foot" id="sessionFoot">
+          <span>先在心里把释义过一遍，再选择记忆程度</span>
+          <span class="kbd-hint">快捷键 <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 评级 · <kbd>空格</kbd> 下一条</span>
+        </div>
+      </section>
+
+      <section class="screen done" id="doneScreen" hidden></section>
+    </main>
+
+    <nav class="bottom-tools" aria-label="答题工具栏">
+      <button type="button" id="bottomPrev"><span aria-hidden="true">‹</span>上一题</button>
+      <button type="button" id="noteBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4H4v16h16v-8M11 13l1-4 8-7 3 3-8 8z"/></svg>笔记</button>
+      <button type="button" id="memorizeBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>背题</button>
+      <button type="button" id="sheetBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h16v18H4zM8 8h8M8 12h8M8 16h5"/></svg>答题卡</button>
+      <button type="button" id="bottomNext"><span aria-hidden="true">›</span>下一题</button>
+    </nav>
+    <section id="scratchLayer" class="scratch-layer" aria-label="透明草稿层" hidden>
+      <div id="scratchCanvas" class="scratch-canvas"></div>
+      <div class="scratch-controls">
+        <span>透明草稿 · 拖动顶部移动</span>
+        <button id="addScratchBtn" type="button">＋ 添加文本框</button>
+        <button id="closeScratchBtn" type="button">收起草稿</button>
+      </div>
+    </section>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <div class="modal" id="modal" hidden>
+      <div class="modal-backdrop" data-close="1"></div>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <header class="modal-head">
+          <div>
+            <p class="modal-kicker" id="modalKicker">OptionKiller</p>
+            <h2 id="modalTitle">题库</h2>
+          </div>
+          <div class="modal-head-actions" id="modalActions">
+            <button class="icon-btn" type="button" data-close="1" aria-label="关闭">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </header>
+        <div class="modal-body" id="modalBody"></div>
+        <footer class="modal-foot" id="modalFoot"></footer>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/extract.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/account.js"></script>
+</body>
+</html>
