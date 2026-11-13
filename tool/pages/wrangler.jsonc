@@ -1,7 +1,7 @@
 {
   "name":"optionkiller",
   "compatibility_date":"2025-04-01",
-  "pages_build_output_dir":"../../../.cache/pages-deploy",
+  "pages_build_output_dir":"site-build",
   "d1_databases":[{"binding":"DB","database_name":"optionkiller","database_id":"956d25bf-7a68-46a4-befa-2817ceb945d8"}],
   "vars":{"QQ_SMTP_USER":"2164206282@qq.com"}
 }

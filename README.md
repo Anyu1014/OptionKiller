@@ -92,7 +92,9 @@ Pages 静态文件准备：
 ```sh
 /Users/y/toolchains/run node tool/pages/prepare.mjs
 cd tool/pages
-/Users/y/toolchains/run node ../../node_modules/wrangler/bin/wrangler.js pages deploy --project-name optionkiller --branch 1.0 --commit-dirty=true
+ln -s ../../../.cache/pages-deploy site-build
+/Users/y/toolchains/run node ../../node_modules/wrangler/bin/wrangler.js pages deploy --project-name optionkiller --branch 1.1 --commit-dirty=true
+unlink site-build
 ```
 
 先执行 web 构建。Pages 已直接绑定原有 D1 数据库，后端随 Pages 部署；QQ_SMTP_PASS 在 Pages 生产环境中作为秘密变量保存。Git 构建命令为 `node tool/pages/prepare.mjs --ci`，输出目录为 `site-build`。
