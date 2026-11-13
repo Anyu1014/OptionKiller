@@ -8,7 +8,7 @@ test('one bounded request yields explanation and mnemonic; existing explanation 
  const old=globalThis.fetch,calls=[];
  try{globalThis.fetch=async(url,opts)=>{calls.push({url,body:JSON.parse(opts.body)});return Response.json({choices:[{message:{content:'```json\n{"e":"判断依据","m":"一句口诀"}\n```'}}]});};
   async function run(needExplanation){let r=await worker.fetch(new Request('https://local.example/api/analysis',{method:'POST',headers:{'content-type':'application/json',origin:'https://local.example'},body:JSON.stringify({provider:'deepseek',key:'fake',model:'test',question:'题',options:[{label:'A',text:'甲'},{label:'B',text:'乙'}],answers:['A'],needExplanation})}),{},{});assert.equal(r.status,200);return r.json();}
-  assert.deepEqual(await run(true),{text:'判断依据',mnemonic:'一句口诀'});assert.equal(calls[0].body.max_tokens,384);assert.match(calls[0].body.messages[0].content,/解析≤100字/);assert.match(calls[0].body.messages[0].content,/简记≤30字/);
+  assert.deepEqual(await run(true),{text:'判断依据',mnemonic:'一句口诀'});assert.equal(calls[0].body.max_tokens,640);assert.match(calls[0].body.messages[0].content,/解析≤280字/);assert.match(calls[0].body.messages[0].content,/简记≤30字/);
   assert.deepEqual(await run(false),{text:'判断依据',mnemonic:'一句口诀'});assert.match(calls[1].body.messages[0].content,/不写解析/);assert.equal(calls.length,2);
  }finally{globalThis.fetch=old;}
 });

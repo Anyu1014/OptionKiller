@@ -1,0 +1,11 @@
+import {cp,mkdir,rm,readFile,writeFile} from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const src=path.resolve(fileURLToPath(new URL('../..',import.meta.url))),root=path.dirname(src),out=path.join(root,'.cache/pages-deploy');
+await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
+await cp(path.join(root,'build/latest/dist'),out,{recursive:true});
+const backend=await readFile(path.join(src,'web/_worker.js'),'utf8');
+const redirect="if (!path.startsWith('/api/')) return Response.redirect('https://optionkiller.pages.dev' + path + url.search, 302);";
+if (!backend.includes(redirect)) throw new Error('Expected backend static route not found');
+await writeFile(path.join(out,'_worker.js'),backend.replace(redirect,"if (!path.startsWith('/api/')) return env.ASSETS.fetch(request);"));
+console.log('PAGES '+out);

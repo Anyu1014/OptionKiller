@@ -4,6 +4,5 @@
   "compatibility_date": "2025-04-01",
   "workers_dev": true,
   "keep_vars": true,
-  "assets": {"directory": "../build/latest/dist", "binding": "ASSETS", "run_worker_first": ["/api/*"]},
   "d1_databases": [{"binding":"DB", "database_name":"optionkiller", "database_id":"956d25bf-7a68-46a4-befa-2817ceb945d8"}]
 }

@@ -199,6 +199,7 @@
       dirty = false;
       try {
         nativeStore.write(JSON.stringify(state));
+        if (global.dispatchEvent && global.Event) global.dispatchEvent(new global.Event('optionkiller:saved'));
       } catch (e) {
         console.warn('[OptionKiller] 保存失败', e);
       }
@@ -339,6 +340,7 @@
       var count = 0;
       for (var i = 0; i < state.cards.length; i++) {
         if (deckId === FAV_DECK_ID ? state.cards[i].fav : state.cards[i].deckId === deckId) {
+          state.cards[i].progressUpdatedAt=now;
           state.cards[i].srs = C.newSrs(now);
           delete state.cards[i].lastAttempt; delete state.cards[i].draft; state.cards[i].wrong=false; state.cards[i].attempts=0; state.cards[i].correctCount=0;
           count++;

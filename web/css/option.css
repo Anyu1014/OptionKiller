@@ -70,3 +70,10 @@ button,a {transition:background .16s, color .16s,transform .16s} button:active:n
 
 .ai-actions {display:flex; flex-wrap:wrap; gap:8px; margin:10px 0;}
 #aiEndpoint {font-size:12px; overflow-wrap:anywhere;}
+
+/* Question navigation fills the reading area, excluding the fixed bottom tools. */
+.main{min-height:calc(100dvh - var(--appbar-h,58px) - 65px)}
+.study{touch-action:pan-y}
+.analysis-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;white-space:normal}
+.analysis-heading h2{margin:0}.analysis-heading button{font-size:12px;flex:none}
+@media(max-width:720px){.study-toolbar>div{gap:14px}.study-toolbar .toolbar-caption{flex:1}.study-toolbar #redoBtn{white-space:nowrap}}

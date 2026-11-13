@@ -2,7 +2,7 @@ import {readFile,readdir,mkdir,writeFile,cp,rename,rm} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 const src=path.resolve(fileURLToPath(new URL('..',import.meta.url))), root=path.dirname(src);
-const latest=path.join(root,'build/latest'), dist=path.join(latest,'dist');
+const latest=path.join(root,'build/latest'), dist=path.join(latest,'dist'), bundle=path.join(root,'.cache/sites-bundle');
 await mkdir(latest,{recursive:true});
 try { await readdir(dist); const history=path.join(root,'build/history',new Date().toISOString().replace(/[:.]/g,'-'));await mkdir(history,{recursive:true});await rename(dist,path.join(history,'dist')); } catch(e) {if(e.code!=='ENOENT')throw e;}
 await mkdir(dist,{recursive:true});await cp(path.join(src,'web'),dist,{recursive:true,filter:p=>!p.endsWith('_worker.js')});
@@ -20,6 +20,7 @@ async function collect(dir,base=''){
 }
 await collect(path.join(src,'web'));
 let worker=await readFile(path.join(src,'web/_worker.js'),'utf8');
+if(worker.includes("import './js/core.js';"))worker=worker.replace("import './js/core.js';",await readFile(path.join(src,'web/js/core.js'),'utf8'));
 worker=worker.replace('export default {','const apiWorker = {');
 worker+='\nconst STATIC='+JSON.stringify(assets)+';\n'+`
 export default {async fetch(request,env,ctx){
@@ -30,9 +31,9 @@ export default {async fetch(request,env,ctx){
  const body=asset.binary?Uint8Array.from(atob(asset.body),c=>c.charCodeAt(0)):asset.body;
  return new Response(request.method==='HEAD'?null:body,{headers:{'content-type':asset.type,'x-content-type-options':'nosniff'}});
 }};`;
-await rm(path.join(src,'dist'),{recursive:true,force:true});
-await mkdir(path.join(src,'dist/server'),{recursive:true});
-await writeFile(path.join(src,'dist/server/index.js'),worker);
-await mkdir(path.join(src,'dist/.openai'),{recursive:true});
-await cp(path.join(src,'.openai/hosting.json'),path.join(src,'dist/.openai/hosting.json'));
-console.log('WEB '+dist);console.log('WORKER '+path.join(src,'dist/server/index.js'));
+await rm(bundle,{recursive:true,force:true});
+await mkdir(path.join(bundle,'server'),{recursive:true});
+await writeFile(path.join(bundle,'server/index.js'),worker);
+await mkdir(path.join(bundle,'.openai'),{recursive:true});
+await cp(path.join(src,'.openai/hosting.json'),path.join(bundle,'.openai/hosting.json'));
+console.log('WEB '+dist);console.log('WORKER '+path.join(bundle,'server/index.js'));

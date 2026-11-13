@@ -12,7 +12,10 @@
   var APP_VERSION = (document.querySelector('meta[name="app-version"]') || {}).content || '1.0';
 
   var AI_KEY = 'optionkiller.ai.session';
-  function aiConfig() { try { return JSON.parse(sessionStorage.getItem(AI_KEY) || 'null'); } catch(e) { return null; } }
+  function aiDeck(card) { var deck=store.activeDeck(); return deck && !deck.virtual ? deck : card ? store.deckById(card.deckId) : app && app.current ? store.deckById(app.current.deckId) : null; }
+  function aiConfig(card) { var deck=aiDeck(card); return deck && deck.aiConfig || null; }
+  function saveAI(config) {var deck=aiDeck();if(!deck)return;deck.aiConfig=config;deck.aiConfigUpdatedAt=Math.max(Date.now(),(deck.aiConfigUpdatedAt||0)+1);store.saveNow();}
+
   var RATING_LABEL = { known: '回答正确', fuzzy: '待补答案', unknown: '回答错误' };
   var view = {type:'all', category:'all', mastered:'all', mode:'practice', order:'sequence'};
   var RATING_ORDER = ['unknown', 'fuzzy', 'known'];
@@ -205,7 +208,7 @@
     if (deck && view.deckId !== deck.id) {view.type='all';view.category='all';view.mastered='all';view.deckId=deck.id;}
     if (!deck) { app.phase = 'done'; app.doneKind = 'empty'; render(); return; }
 
-    var built = buildQueue(includeAll === true);
+    var built = buildQueue(true);
     var queue = built.all;
     if (view.order === 'random') queue = queue.map(function(c) { return {c:c, r:Math.random()}; }).sort(function(a,b) {return a.r-b.r;}).map(function(x) { return x.c; });
     if (!queue.length) {
@@ -220,7 +223,7 @@
     }
 
     app.queue = queue.slice();
-    app.index = 0;
+    app.index = Math.max(0, queue.findIndex(function(c){return deck.reading && c.id === deck.reading.cardId;}));
     app.totalUnique = queue.length;
     app.ratedIds = new Set();
     app.sessionStart = Date.now();
@@ -230,8 +233,8 @@
     app.erasing = false;
     app.selection = null;
     app.painted = null;
-    presentPrompt(app.queue[0]);
-    render();
+    presentPrompt(app.queue[app.index]);
+    render(); animateQuestion(-1);
   }
 
   function rateCard() {
@@ -241,6 +244,7 @@
     var result = C.grade(card, app.selected);
     var rating = result === null ? 'fuzzy' : result ? 'known' : 'unknown';
     var wasNew = C.isNewCard(card);
+    card.progressUpdatedAt = Date.now();
     card.lastAttempt = { selected:app.selected.slice(), correct:result, at:Date.now() };
     card.attempts = (card.attempts || 0) + 1;
     card.correctCount = (card.correctCount || 0) + (result === true ? 1 : 0);
@@ -273,10 +277,12 @@
   function presentPrompt(card) {
     closeDraft();
     app.current = card;
+    var readingDeck=store.activeDeck();
+    if (readingDeck && !readingDeck.virtual && (!readingDeck.reading || readingDeck.reading.cardId!==card.id)) {readingDeck.reading={cardId:card.id};readingDeck.readingUpdatedAt=Date.now();store.saveNow();}
     app.phase = view.mode === 'memorize' ? 'revealed' : 'prompt';
     app.selected = card.draft && Array.isArray(card.draft.selected) ? card.draft.selected.filter(function(x) { return card.options.some(function(o) {return o.label === x;}); }) : [];
     app.rating = null;
-    if (view.mode !== 'memorize' && card.lastAttempt && app.ratedIds.has(card.id)) { app.phase='revealed'; app.selected=card.lastAttempt.selected.slice(); app.rating=app.ratingById[card.id] || null; }
+    if (view.mode !== 'memorize' && card.lastAttempt) { app.phase='revealed'; app.selected=card.lastAttempt.selected.slice(); app.rating=app.ratingById[card.id] || null; }
     app.revealed = new Set();
     app.tokens = [];
     app.tokenEls = new Map();
@@ -287,12 +293,24 @@
     app.painted = null;
   }
 
+  function animateQuestion(direction) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !els.card.animate) return;
+    if(app.navigationAnimation)app.navigationAnimation.cancel();
+    app.navigationAnimation=els.card.animate([{transform:'translateX('+(direction*28)+'px)',opacity:.5},{transform:'translateX(0)',opacity:1}],{duration:190,easing:'cubic-bezier(.2,.7,.2,1)'});
+  }
+  function redoCurrent() {
+    var card=app.current;if(!card)return;
+    askConfirm('Progress','重做本题','仅清除本题作答记录和复习排期；保留解析、简记、收藏、笔记和草稿。历史学习统计保留。','重做',function(){
+      card.srs=C.newSrs(Date.now());delete card.lastAttempt;delete card.draft;card.wrong=false;card.attempts=0;card.correctCount=0;card.progressUpdatedAt=Math.max(Date.now(),(card.progressUpdatedAt||0)+1);
+      app.ratedIds.delete(card.id);presentPrompt(card);store.saveNow();render();
+    });
+  }
   function nextCard() {
     if (!app.current) return;
     if (app.index >= app.queue.length-1) { finishSession(); return; }
     app.index++;
-    presentPrompt(app.queue[app.index]); render();
-    window.scrollTo({top:0, behavior:'smooth'});
+    presentPrompt(app.queue[app.index]); render(); animateQuestion(1);
+    window.scrollTo({top:0, behavior:'auto'});
   }
 
   function prevCard() {
@@ -300,7 +318,7 @@
     app.index -= 1;
     presentPrompt(app.queue[app.index]);
     render();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   function jumpTo(cardId) {
@@ -323,7 +341,7 @@
     app.index = idx;
     presentPrompt(card);
     render();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   function restartAll() {
@@ -349,7 +367,7 @@
     document.getElementById('masterBtn').setAttribute('aria-pressed',String(slayed));
     document.getElementById('masterLabel').textContent = slayed ? '已斩' : '斩题';
     document.getElementById('bottomPrev').disabled = !app.current || app.index<=0;
-    ['noteBtn','draftBtn','masterBtn','memorizeBtn','bottomNext'].forEach(function(id){document.getElementById(id).disabled=!app.current;});
+    ['noteBtn','draftBtn','redoBtn','masterBtn','memorizeBtn','bottomNext'].forEach(function(id){document.getElementById(id).disabled=!app.current;});
 
     if (app.phase === 'done') {
       els.studyScreen.hidden = true;
@@ -367,8 +385,8 @@
     var card = app.current;
     if (!card) return;
 
-    var total = app.totalUnique || 1;
-    els.cardCounter.textContent = '第 ' + (app.index + 1) + ' / ' + total + ' 题';
+    var ordered = deckCards(), number = ordered.findIndex(function(c){return c.id === card.id;}) + 1;
+    els.cardCounter.textContent = '第 ' + (number || 1) + ' / ' + ordered.length + ' 题';
     if (els.prevBtn) els.prevBtn.disabled = app.index <= 0;
     els.cardStatus.textContent = card.type === 'multi' ? '多选题－X型题' : '单选题－A型题';
     els.term.textContent = card.term;
@@ -425,8 +443,8 @@
     box.appendChild(h('p', {class:'question-meta', text:'来源：' + card.source}));
     els.answer.appendChild(box);
     var analysis = h('div', {class:'analysis-panel'});
-    analysis.appendChild(h('h2', {text:'题目解析'}));
-    analysis.appendChild(h('p', {text:card.explanation || (aiValid && card.aiExplanation) || (app.aiLoading === card.id ? '正在生成 AI 解析…' : app.aiError && app.aiError.id === card.id ? app.aiError.message : '这道题暂未提供解析，可在题库编辑中添加。')}));
+    analysis.appendChild(h('div',{class:'analysis-heading'},h('h2',{text:'题目解析'}),h('button',{type:'button',class:'ghost-btn',text:app.aiLoading===card.id?'解析中…':'重新解析',disabled:app.aiLoading===card.id,onclick:function(){requestAnalysis(card,true);}})));
+    analysis.appendChild(h('p', {text:(aiValid && card.aiExplanation) || card.explanation || (app.aiLoading === card.id ? '正在生成 AI 解析…' : app.aiError && app.aiError.id === card.id ? app.aiError.message : '这道题暂未提供解析，可在题库编辑中添加。')}));
     if (!card.explanation && aiValid && card.aiExplanation) analysis.appendChild(h('p',{class:'import-help',text:'AI 生成，仅供参考，请核对原始资料。'}));
     analysis.appendChild(h('h2',{text:'简记'}));
     analysis.appendChild(h('p',{text:(aiValid && card.aiMnemonic) || (app.aiLoading === card.id ? '正在生成简记…' : app.aiError && app.aiError.id === card.id ? app.aiError.message : '开启自动解析并提交答案后生成。')}));
@@ -453,15 +471,13 @@
   function customAnalysis(config, card, needExplanation) {
     return Promise.resolve().then(function(){
       var urls=C.customEndpoints(config.endpoint);
-      var choices=card.options.map(function(o){return o.label + '. ' + o.text;}).join('\n');
-      var prompt='用中文答题。' + (needExplanation ? '解析≤100字，说明判断依据；' : '不写解析；') + '简记≤30字，用准确口诀或联想；无答案不猜，存疑说明。只输出JSON：{"e":"解析","m":"简记"}。\n题:' + card.term + '\n选项:\n' + choices + '\n答案:' + (card.answers.join('') || '未知');
-      return customFetch(urls.chat,config,{model:config.model,messages:[{role:'user',content:prompt}],max_tokens:384});
+      return customFetch(urls.chat,config,{model:config.model,messages:[{role:'user',content:C.analysisPrompt(card,needExplanation)}],max_tokens:640});
     }).then(function(data){
       var text=data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
       if(typeof text !== 'string' || !text.trim())throw new Error('自定义服务未返回解析内容');
       var raw=text.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''), parsed;
       try{parsed=JSON.parse(raw);}catch(e){parsed=null;}
-      var explanation=parsed && typeof parsed.e==='string' ? parsed.e.trim().slice(0,400) : needExplanation ? raw.slice(0,400) : '';
+      var explanation=parsed && typeof parsed.e==='string' ? parsed.e.trim().slice(0,1200) : needExplanation ? raw.slice(0,1200) : '';
       var mnemonic=parsed && typeof parsed.m==='string' ? parsed.m.trim().slice(0,120) : !needExplanation ? raw.slice(0,120) : '';
       if(!explanation && !mnemonic)throw new Error('自定义服务未返回解析或简记');
       return {text:explanation,mnemonic:mnemonic};
@@ -470,17 +486,18 @@
 
   function performAnalysis(config, card, needExplanation) {
     if (config.provider === 'custom') return customAnalysis(config,card,needExplanation);
-    return fetch((window.OK_API_BASE || '')+'/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({provider:config.provider,key:config.key,model:config.model,question:card.term,options:card.options,answers:card.answers,needExplanation:needExplanation})})
+    return window.OK_FETCH((window.OK_API_BASE || '')+'/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({provider:config.provider,key:config.key,model:config.model,question:card.term,options:card.options,answers:card.answers,needExplanation:needExplanation})},40000)
       .then(function(res){return res.json().then(function(data){if(!res.ok)throw new Error(data.error || 'AI 解析失败');return data;});});
   }
 
   function requestAnalysis(card, force) {
-    var config=aiConfig(), aiValid=!card.aiSourceDef || card.aiSourceDef===card.def;
-    if (!config || !config.enabled || (!config.key && config.provider !== 'custom') || !config.model || (!force && aiValid && (card.aiAttempted || ((card.explanation || card.aiExplanation) && card.aiMnemonic))) || app.aiLoading === card.id) return;
+    var config=aiConfig(card), aiValid=!card.aiSourceDef || card.aiSourceDef===card.def;
+    if (force && (!config || !config.model || (!config.key && config.provider!=='custom'))) {toast('请先在设置中配置自动解析服务');return;}
+    if (!config || (!force && !config.enabled) || (!config.key && config.provider !== 'custom') || !config.model || (!force && aiValid && (card.aiAttempted || ((card.explanation || card.aiExplanation) && card.aiMnemonic))) || app.aiLoading === card.id) return;
     var sourceDef=card.def;
     app.aiLoading=card.id;app.aiError=null;render();
-    performAnalysis(config,card,!(card.explanation || (aiValid && card.aiExplanation)))
-      .then(function(data){if(store.findCard(card.id)!==card || card.def!==sourceDef)return;if(!card.explanation && (!aiValid || !card.aiExplanation) && data.text)card.aiExplanation=data.text;if(!aiValid)card.aiMnemonic='';if(data.mnemonic)card.aiMnemonic=data.mnemonic;card.aiSourceDef=sourceDef;card.aiAttempted=true;card.aiModel=config.provider + ' / ' + config.model;card.aiUpdatedAt=Math.max(Date.now(),(card.aiUpdatedAt||0)+1);store.save();})
+    performAnalysis(config,card,force || !((aiValid && card.aiExplanation) || card.explanation))
+      .then(function(data){if(force && !data.text)throw new Error('AI 未返回题目解析，原解析已保留');if(store.findCard(card.id)!==card || card.def!==sourceDef)return;if((force || !card.explanation && (!aiValid || !card.aiExplanation)) && data.text)card.aiExplanation=data.text;if(!aiValid)card.aiMnemonic='';if(data.mnemonic)card.aiMnemonic=data.mnemonic;card.aiSourceDef=sourceDef;card.aiAttempted=true;card.aiModel=config.provider + ' / ' + config.model;card.aiUpdatedAt=Math.max(Date.now(),(card.aiUpdatedAt||0)+1);store.saveNow();})
       .catch(function(e){app.aiError={id:card.id,message:e.message || 'AI 解析失败，请检查设置'};})
       .finally(function(){if(app.aiLoading===card.id)app.aiLoading=null;if(app.current && app.current.id===card.id && app.phase==='revealed')render();});
   }
@@ -1452,7 +1469,7 @@
       if (raw.length>12000 || formatted.length>24000) {checkStatus.textContent='内容较长，请分批核对，或关闭 AI 核对后导入。';updateImportButton();return;}
       checkStatus.textContent='AI 正在核对，请稍候…';updateImportButton();
       var prompt='核对原文与解析结果是否存在遗漏、错分题干选项、答案或题型。只列差异及题号，最多200字；没有发现差异则说明未发现明显差异。不猜答案，不补原文没有的内容。\n原文:\n'+raw+'\n解析结果:\n'+formatted;
-      var work=config.provider==='custom' ? Promise.resolve().then(function(){return customFetch(C.customEndpoints(config.endpoint).chat,config,{model:config.model,messages:[{role:'user',content:prompt}],max_tokens:384});}).then(function(data){var content=data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;if(typeof content!=='string' || !content.trim())throw new Error('AI 未返回核对结果');return {text:content};}) : fetch((window.OK_API_BASE || '')+'/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'import-check',provider:config.provider,key:config.key,model:config.model,question:raw,parsedText:formatted})}).then(function(res){return res.json().then(function(data){if(!res.ok)throw new Error(data.error || '核对失败');return data;});});
+      var work=config.provider==='custom' ? Promise.resolve().then(function(){return customFetch(C.customEndpoints(config.endpoint).chat,config,{model:config.model,messages:[{role:'user',content:prompt}],max_tokens:384});}).then(function(data){var content=data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;if(typeof content!=='string' || !content.trim())throw new Error('AI 未返回核对结果');return {text:content};}) : window.OK_FETCH((window.OK_API_BASE || '')+'/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'import-check',provider:config.provider,key:config.key,model:config.model,question:raw,parsedText:formatted})},40000).then(function(res){return res.json().then(function(data){if(!res.ok)throw new Error(data.error || '核对失败');return data;});});
       work.then(function(data){if(revision!==checkRevision || !checkEnabled.checked)return; if(typeof data.text!=='string' || !data.text.trim())throw new Error('AI 未返回核对结果');checkPassed=true;checkStatus.textContent='AI 核对：'+data.text.trim().slice(0,1200)+'（AI 结果仅供参考，请对照原始资料）';updateImportButton();}).catch(function(e){if(revision!==checkRevision || !checkEnabled.checked)return;checkStatus.textContent=(e.message || 'AI 核对失败')+'；可重新勾选核对或关闭核对后导入。';updateImportButton();});
     }
     checkEnabled.addEventListener('change',function(){if(checkEnabled.checked)checkImport();else{checkRevision++;checkPassed=false;checkStatus.textContent='AI 核对已关闭；不会发送内容。';updateImportButton();}});
@@ -1658,7 +1675,7 @@
 
     var ai = h('div',{class:'setting-group'});
     ai.appendChild(h('div',{class:'setting-label',text:'自动解析'}));
-    ai.appendChild(h('p',{class:'setting-desc',text:'开启后，提交答案会把题干、选项和标准答案发送给所选服务商，一次生成简明解析和简记，可能产生费用。已有解析会保留，AI 结果仅供参考。API Key 仅保存在当前标签页会话，不同步到云端。'}));
+    ai.appendChild(h('p',{class:'setting-desc',text:'开启后，提交答案会把题干、选项和标准答案发送给所选服务商，一次生成简明解析和简记，可能产生费用。已有解析会保留，AI 结果仅供参考。设置自动保存到当前私人题库并随账号同步（API Key 会保存在私人云数据中）；不要向他人发送私人备份。群分享只包含题目，不含 Key。'}));
     var currentAI=aiConfig() || {}, enabled=h('input',{type:'checkbox',id:'aiEnabled',checked:!!currentAI.enabled});
     ai.appendChild(h('label',{class:'ai-toggle',for:'aiEnabled'},enabled,' 启用自动解析'));
     var provider=h('select',{class:'text-input',id:'aiProvider','aria-label':'AI 服务商'});
@@ -1680,7 +1697,7 @@
       if(!secret && chosen!=='custom'){status.textContent='请先填写 API Key';key.focus();return;}
       try {
         if(chosen==='custom')work=customFetch(C.customEndpoints(address).models,{key:secret}).then(function(data){return {models:(Array.isArray(data.data)?data.data:[]).map(function(x){return x.id;}).filter(function(x){return typeof x==='string';})};});
-        else work=fetch((window.OK_API_BASE || '')+'/api/analysis/models',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({provider:chosen,key:secret})}).then(function(res){return res.json().then(function(data){if(!res.ok)throw new Error(data.error || '获取模型失败');return data;});});
+        else work=window.OK_FETCH((window.OK_API_BASE || '')+'/api/analysis/models',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({provider:chosen,key:secret})}).then(function(res){return res.json().then(function(data){if(!res.ok)throw new Error(data.error || '获取模型失败');return data;});});
       } catch(e) {status.textContent=e.message;return;}
       getModels.disabled=true;status.textContent='正在获取模型列表…';
       work
@@ -1710,13 +1727,12 @@
     ai.appendChild(h('div',{class:'ai-actions'},getModels,testConnection));
     ai.appendChild(options);ai.appendChild(status);
     ai.appendChild(h('p',{class:'setting-desc',text:'获取模型和测试连接会向所选服务商发送 API Key；连接测试可能产生费用。自定义地址由浏览器直接访问，服务需允许跨域（CORS）；支持 HTTPS 或本机回环 HTTP。'}));
-    ai.appendChild(h('button',{class:'ghost-btn',type:'button',text:'保存自动解析设置',onclick:function(){
-      var validModel=provider.value==='custom' ? /^[A-Za-z0-9._:/-]{1,160}$/.test(model.value.trim()) : /^[A-Za-z0-9._:-]{1,120}$/.test(model.value.trim());
-      if(enabled.checked && ((!key.value.trim() && provider.value!=='custom') || !validModel)) {toast('请填写 API Key 和有效的模型名称');return;}
-      if(enabled.checked && provider.value==='custom') {try{C.customEndpoints(endpoint.value);}catch(e){toast(e.message);return;}}
-      try {sessionStorage.setItem(AI_KEY,JSON.stringify({enabled:enabled.checked,provider:provider.value,model:model.value.trim(),key:key.value.trim(),endpoint:provider.value==='custom' ? endpoint.value.trim() : ''}));toast('自动解析设置已保存到当前会话');}
-      catch(e){toast('保存失败，请检查浏览器存储设置');}
-    }}));
+    function autoSaveAI() {
+      saveAI({enabled:enabled.checked,provider:provider.value,model:model.value.trim(),key:key.value.trim(),endpoint:provider.value==='custom' ? endpoint.value.trim() : ''});
+    }
+    [enabled,provider,model,key,endpoint].forEach(function(input){input.addEventListener('input',autoSaveAI);input.addEventListener('change',autoSaveAI);});
+    options.addEventListener('change',autoSaveAI);
+    ai.appendChild(h('p',{class:'setting-desc',text:'修改即保存；未填写完整时保留草稿，补齐模型和 Key 后可测试连接。'}));
     body.appendChild(ai);
 
     var g3 = h('div', { class: 'setting-group' });
@@ -1855,15 +1871,18 @@
     try { els.answer.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
   });
 
-  var swipeStart = null;
-  els.studyScreen.addEventListener('touchstart', function (e) {
+  var swipeStart = null, swipeSurface=document.getElementById('main');
+  swipeSurface.addEventListener('touchstart', function (e) {
     swipeStart = null;
-    if (e.touches.length !== 1 || app.modalOpen || app.scratchCard || app.marking || app.erasing ||
+    if (app.phase==='done' || e.touches.length !== 1 || app.modalOpen || app.scratchCard || app.marking || app.erasing ||
         (e.target.closest && e.target.closest('button,input,textarea,select,[contenteditable]'))) return;
     var touch = e.touches[0];
+    var bottom=document.querySelector('.bottom-tools').getBoundingClientRect().top;
+    if(touch.clientY>=bottom || touch.clientY<els.term.getBoundingClientRect().top)return;
     swipeStart = {id:touch.identifier, x:touch.clientX, y:touch.clientY};
   }, {passive:true});
-  els.studyScreen.addEventListener('touchend', function (e) {
+  swipeSurface.addEventListener('touchmove',function(e){if(!swipeStart || e.touches.length!==1)return;var t=e.touches[0],dx=t.clientX-swipeStart.x,dy=t.clientY-swipeStart.y;if(Math.abs(dy)>Math.abs(dx)&&Math.abs(dy)>15)swipeStart=null;else if(Math.abs(dx)>18&&Math.abs(dx)>Math.abs(dy)*1.5)e.preventDefault();},{passive:false});
+  swipeSurface.addEventListener('touchend', function (e) {
     var start = swipeStart; swipeStart = null;
     if (!start || e.touches.length || app.modalOpen || app.scratchCard || app.marking || app.erasing) return;
     var touch = Array.prototype.find.call(e.changedTouches, function (t) {return t.identifier === start.id;});
@@ -1872,7 +1891,7 @@
     if (direction === 1 && app.index < app.queue.length - 1) nextCard();
     else if (direction === -1 && app.index > 0) prevCard();
   }, {passive:true});
-  els.studyScreen.addEventListener('touchcancel', function () {swipeStart = null;}, {passive:true});
+  swipeSurface.addEventListener('touchcancel', function () {swipeStart = null;}, {passive:true});
 
   els.deckBtn.addEventListener('click', function () { openDecks(); });
   els.settingsBtn.addEventListener('click', openSettings);
@@ -1908,7 +1927,7 @@
     if (app.phase === 'done' && app.doneKind === 'summary') return;
     if (app.phase === 'prompt' || app.phase === 'revealed' || app.phase === 'recall') {
       // 回到本轮第一张之前不现实，这里只把页面滚回顶部
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: 'auto' });
     }
   });
 
@@ -2022,6 +2041,7 @@
     lastDay = C.dateKey();
     document.getElementById('statsBtn').addEventListener('click',openStats);
     document.getElementById('draftBtn').addEventListener('click',openDraft);
+    document.getElementById('redoBtn').addEventListener('click',redoCurrent);
     document.getElementById('addScratchBtn').addEventListener('click',addScratch);
     document.getElementById('closeScratchBtn').addEventListener('click',closeDraft);
     window.addEventListener('resize',function() {if(app.scratchCard) document.querySelectorAll('.scratch-note').forEach(function(node,i) {positionScratch(node,app.scratchCard.scratchBoxes[i]);});});
@@ -2031,6 +2051,7 @@
     document.getElementById('bottomNext').addEventListener('click',nextCard);
     document.getElementById('masterBtn').addEventListener('click',function(){if(app.current){app.current.mastered=!app.current.mastered;app.current.masteredUpdatedAt=Math.max(Date.now(),(app.current.masteredUpdatedAt||0)+1);store.saveNow();toast(app.current.mastered?'本题已斩':'已取消斩题');render();}});
     document.getElementById('memorizeBtn').addEventListener('click',function(){view.mode=view.mode==='memorize'?'practice':'memorize';if(app.current)presentPrompt(app.current);render();});
+    try {var legacyAI=JSON.parse(sessionStorage.getItem(AI_KEY)||'null');if(legacyAI && !aiConfig())saveAI(legacyAI);sessionStorage.removeItem(AI_KEY);}catch(e){}
     startSession();
     armMidnightRefresh();
   }

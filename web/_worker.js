@@ -1,3 +1,4 @@
+import './js/core.js';
 /*!
  * OptionKiller · cloud worker (Cloudflare Pages advanced mode)
  *
@@ -375,7 +376,7 @@ async function sendMail(env, mail) {
 }
 
 function welcomeMail(email, restored = false) {
-  const link = 'https://optionkiller.yuanhyu1014.workers.dev';
+  const link = 'https://optionkiller.pages.dev';
   const title = restored ? '数据已恢复' : '注册成功';
   const text = [
     'OptionKiller / 选择题练习',
@@ -477,10 +478,10 @@ async function handleLogin(request, env) {
   const email = normalizeEmail(body.email);
   const password = String(body.password || '');
   const row = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
-  need(row, 401, '邮箱或密码不正确');
+  need(row, 401, '该账户未注册');
   need(!row.deleted_at, 403, '账号已注销；7 天内可用同一邮箱和原密码重新注册，数据会恢复');
   const hash = await hashPassword(password, row.salt);
-  need(sameSecret(hash, row.pass_hash), 401, '邮箱或密码不正确');
+  need(sameSecret(hash, row.pass_hash), 401, '密码不正确');
   const now = Date.now();
   await env.DB.prepare(
     "UPDATE users SET last_seen_at = ?, presence = 'online' WHERE id = ?",
@@ -1184,15 +1185,14 @@ async function handleAnalysis(request) {
   const answer = Array.isArray(input.answers) ? input.answers.filter(x => /^[A-E]$/.test(x)).join('') : '';
   const needExplanation = input.needExplanation !== false;
   const prompt = verify ? '核对原文与解析结果是否存在遗漏、错分题干选项、答案或题型。只列差异及题号，最多200字；没有发现差异则说明未发现明显差异。不猜答案，不补原文没有的内容。\n原文:\n' + question + '\n解析结果:\n' + parsedText :
-    '用中文答题。' + (needExplanation ? '解析≤100字，说明判断依据；' : '不写解析；') +
-    '简记≤30字，用准确口诀或联想；无答案不猜，存疑说明。只输出JSON：{"e":"解析","m":"简记"}。\n题:' + question + '\n选项:\n' + choices + '\n答案:' + (answer || '未知');
+    globalThis.MJZ.core.analysisPrompt({term:question,options,answers:answer.split('')},needExplanation);
   let url, headers={'content-type':'application/json'}, body;
   if (provider === 'gemini') {
     url='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent';
-    headers['x-goog-api-key']=key; body={contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:384}};
+    headers['x-goog-api-key']=key; body={contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:verify ? 384 : 640}};
   } else {
     url={openai:'https://api.openai.com/v1/chat/completions',deepseek:'https://api.deepseek.com/chat/completions',doubao:'https://ark.cn-beijing.volces.com/api/v3/chat/completions'}[provider];
-    headers.authorization='Bearer '+key; body={model,messages:[{role:'user',content:prompt}],max_tokens:384};
+    headers.authorization='Bearer '+key; body={model,messages:[{role:'user',content:prompt}],max_tokens:verify ? 384 : 640};
   }
   let response;
   try { response=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:AbortSignal.timeout(30000)}); }
@@ -1204,7 +1204,7 @@ async function handleAnalysis(request) {
   const raw=text.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
   if (verify) return json({text:raw.slice(0,1200)});
   let parsed; try {parsed=JSON.parse(raw);} catch {parsed=null;}
-  const explanation=parsed && typeof parsed.e==='string' ? parsed.e.trim().slice(0,400) : needExplanation ? raw.slice(0,400) : '';
+  const explanation=parsed && typeof parsed.e==='string' ? parsed.e.trim().slice(0,1200) : needExplanation ? raw.slice(0,1200) : '';
   const mnemonic=parsed && typeof parsed.m==='string' ? parsed.m.trim().slice(0,120) : !needExplanation ? raw.slice(0,120) : '';
   if (!explanation && !mnemonic) return fail(502,'AI 服务未返回解析或简记');
   return json({text:explanation, mnemonic});
@@ -1233,7 +1233,7 @@ async function route(request, env, ctx) {
   const url = new URL(request.url);
   const path = url.pathname;
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (!path.startsWith('/api/')) return env.ASSETS.fetch(request);
+  if (!path.startsWith('/api/')) return Response.redirect('https://optionkiller.pages.dev' + path + url.search, 302);
   if (path === '/api/analysis' && request.method === 'POST') return handleAnalysis(request);
   if (path === '/api/analysis/models' && request.method === 'POST') return handleAnalysisModels(request);
   if (!env.DB) return fail(503, '云端未配置数据库绑定（D1: DB）');

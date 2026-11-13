@@ -124,6 +124,11 @@
     return found;
   }
 
+  function analysisPrompt(card, needExplanation) {
+    return '用中文讲解选择题。' + (needExplanation ? '解析≤280字：先一句核心考点，再按本题每个选项逐项说明判断依据，每项≤35字；标明选项事实对错，并区分题干要求选正确还是错误。' : '不写解析；') +
+      '简记≤30字，准确口诀或联想。保留题干和给定答案；缺答案不猜，答案与知识冲突须指出。不得编造教材版本、页码或引文。只输出JSON：{"e":"解析","m":"简记"}。\n题:' + card.term + '\n选项:\n' + card.options.map(function(o){return o.label+'. '+o.text;}).join('\n') + '\n答案:' + (card.answers.join('') || '未知');
+  }
+
   /* ---------------- 题库解析 ---------------- */
 
   function dedupe(cards) {
@@ -445,7 +450,10 @@
       if (!deck || typeof deck.id !== 'string' || !deck.id) return;
       var hit = deckById.get(deck.id) ||
         (typeof deck.name === 'string' ? deckByName.get(deck.name) : null);
-      if (hit) { deckRemap.set(deck.id, hit.id); return; }
+      if (hit) {
+        if (deck.id === hit.id) ['aiConfig','reading'].forEach(function(k){if ((deck[k+'UpdatedAt'] || 0) > (hit[k+'UpdatedAt'] || 0)) {hit[k]=deck[k];hit[k+'UpdatedAt']=deck[k+'UpdatedAt'];}});
+        deckRemap.set(deck.id, hit.id); return;
+      }
       // 换设备登录时，别把本机没动过的示例题库并进云端
       if (deck.sample === true && remoteCards.length) {
         var used = localCards.some(function (card) {
@@ -486,7 +494,7 @@
         target.highlights.push(h);
       });
       if (mine.options) ['type','options','answers','explanation','section','source','topic','difficulty'].forEach(function(k) { target[k] = mine[k]; });
-      if ((mine.lastAttempt && mine.lastAttempt.at || 0) > (target.lastAttempt && target.lastAttempt.at || 0)) {
+      if ((mine.lastAttempt && mine.lastAttempt.at || 0) > Math.max(target.lastAttempt && target.lastAttempt.at || 0, target.progressUpdatedAt || 0)) {
         target.lastAttempt = mine.lastAttempt; target.wrong = mine.wrong; target.attempts = mine.attempts; target.correctCount = mine.correctCount;
       }
       if ((mine.noteUpdatedAt || 0) > (target.noteUpdatedAt || 0)) { target.note = mine.note; target.noteUpdatedAt = mine.noteUpdatedAt; }
@@ -495,7 +503,9 @@
       }
       if ((mine.masteredUpdatedAt || 0) > (target.masteredUpdatedAt || 0)) { target.mastered = mine.mastered === true; target.masteredUpdatedAt = mine.masteredUpdatedAt; }
       if ((mine.aiUpdatedAt || 0) > (target.aiUpdatedAt || 0)) { target.aiExplanation=mine.aiExplanation; target.aiMnemonic=mine.aiMnemonic; target.aiSourceDef=mine.aiSourceDef; target.aiAttempted=mine.aiAttempted; target.aiModel=mine.aiModel; target.aiUpdatedAt=mine.aiUpdatedAt; }
-      target.srs = laterSrs(target.srs, mine.srs);
+      if ((mine.progressUpdatedAt || 0) > Math.max(target.progressUpdatedAt || 0, target.lastAttempt && target.lastAttempt.at || 0)) {
+        ['lastAttempt','draft','wrong','attempts','correctCount','srs','progressUpdatedAt'].forEach(function(k){target[k]=mine[k];});
+      } else if ((target.progressUpdatedAt || 0) <= (mine.lastAttempt && mine.lastAttempt.at || 0)) target.srs = laterSrs(target.srs, mine.srs);
     }
 
     remoteCards.forEach(function (card) {
@@ -584,6 +594,7 @@
     grade: grade,
     optionState: optionState,
     customEndpoints: customEndpoints,
+    analysisPrompt: analysisPrompt,
     parseText: parseText,
     parseJSON: parseJSON,
     parseImport: parseImport,

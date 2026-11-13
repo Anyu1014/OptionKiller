@@ -33,7 +33,7 @@
   var me = null;
   var cloudVersion = 0;
   var lastHash = '';
-  var syncing = false;
+  var syncing = false, pulling=false, cloudReady=false, retryAfter=0;
   var syncNote = '尚未同步';
   var unread = 0;
   var heartbeatTimer = null;
@@ -72,7 +72,7 @@
     var headers = { };
     if (opts.body !== undefined) headers['content-type'] = 'application/json';
     if (session && session.token) headers.authorization = 'Bearer ' + session.token;
-    return fetch(API_BASE + path, {
+    return window.OK_FETCH(API_BASE + path, {
       method: opts.method || 'GET',
       headers: headers,
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
@@ -108,7 +108,7 @@
 
   function errText(error) {
     if (!error) return '操作失败';
-    if (error.status === 401) return '登录已过期，请重新登录';
+    if (error.status === 401) return error.message || '登录已过期，请重新登录';
     if (error.message === 'Failed to fetch') return '连不上云端，请检查网络';
     return error.message || '操作失败';
   }
@@ -482,8 +482,10 @@
   }
 
   function pullCloud(first) {
-    if (!session) return Promise.resolve();
+    if (!session || pulling) return Promise.resolve();
+    pulling=true;setNote('正在连接云端…');
     return api('/api/me/data').then(function (data) {
+      cloudReady=true;retryAfter=0;
       if (!data.payload) {
         syncPaused = false;
         cloudVersion = 0;
@@ -491,7 +493,7 @@
         syncNote = '云端还没有数据';
         setNote();
         var local = countLocal();
-        if (local.cards > 0) return pushNow(true);
+        if (local.decks > 0) return pushNow(true);
         return null;
       }
       cloudVersion = data.updatedAt;
@@ -513,16 +515,17 @@
       return null;
     }).catch(function (err) {
       if (err.status === 401) return handleExpired();
-      syncNote = '同步失败：' + errText(err);
+      cloudReady=false;retryAfter=Date.now()+15000;
+      syncNote = '同步失败：' + errText(err) + '；连接恢复后自动重试';
       setNote();
-    });
+    }).finally(function(){pulling=false;});
   }
 
   function pushNow(force) {
     if (!session || syncing) return Promise.resolve();
     var payload = payloadOf();
     var hash = hashOf(payload);
-    if (!force && (hash === lastHash || !lastHash || syncPaused)) return Promise.resolve();
+    if (!force && (hash === lastHash || !cloudReady || syncPaused)) return Promise.resolve();
     syncing = true;
     setNote();
     return api('/api/me/data', {
@@ -551,6 +554,7 @@
 
   function watchChanges() {
     if (!session || syncPaused) return;
+    if (!cloudReady) {if(!pulling && Date.now()>=retryAfter)pullCloud(true);return;}
     var hash = hashOf(payloadOf());
     if (hash !== lastHash && !syncing) pushNow(false);
   }
@@ -614,6 +618,7 @@
   }
 
   function startCloud() {
+    cloudReady=false;retryAfter=0;setNote('正在连接云端…');
     syncPaused = false;   // 重新登录/启动时恢复自动同步
     startTimers();
     heartbeat();
@@ -628,7 +633,7 @@
     syncPaused = false;
     A.toast('正在检查云端…');
     pullCloud(false).then(function () {
-      if (!syncPaused) pushNow(true);
+      if (!syncPaused && cloudReady) pushNow(true);
     });
   }
 
@@ -1686,6 +1691,7 @@
       updateAccountBtn();
       return;
     }
+    syncNote='正在验证账号和云连接…';
     me = session.user;
     updateAccountBtn();
     api('/api/me').then(function (data) {
@@ -1701,6 +1707,10 @@
       }
     });
   }
+
+  var uploadTimer;
+  window.addEventListener('optionkiller:saved',function(){clearTimeout(uploadTimer);uploadTimer=setTimeout(watchChanges,400);});
+  window.addEventListener('online',function(){retryAfter=0;watchChanges();});
 
   // 页面关闭前尽量把最后一次修改推上去
   window.addEventListener('pagehide', function () {
