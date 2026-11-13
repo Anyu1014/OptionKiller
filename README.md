@@ -17,7 +17,7 @@ OptionKiller/
 /Users/y/Downloads/Codex/Mac工作区/OptionKiller/src/tool/run.sh dev
 ```
 
-访问 http://127.0.0.1:5198 。Node 24 自带 SQLite，不需要 npm 安装。真实账号与题库存储在 `src/.local/optionkiller.sqlite`（Git 忽略）；QA 使用 `.cache/qa.sqlite`。首次使用需注册 OptionKiller 账号，和 NounKiller 不共用数据库或登录会话。线上网站： https://optionkiller.pages.dev 。旧 Worker 入口保留，Pages 迁移准备为直接使用现有 D1 数据库和独立配置的发件密钥；上线前仍通过现有 Worker 服务绑定提供 API。
+访问 http://127.0.0.1:5198 。Node 24 自带 SQLite，不需要 npm 安装。真实账号与题库存储在 `src/.local/optionkiller.sqlite`（Git 忽略）；QA 使用 `.cache/qa.sqlite`。首次使用需注册 OptionKiller 账号，和 NounKiller 不共用数据库或登录会话。线上网站： https://optionkiller.pages.dev 。旧 Worker 入口保留，Pages 已直接使用原有 D1 数据库和独立配置的发件密钥，不迁移账号数据。
 
 ## 主要功能
 
@@ -95,4 +95,4 @@ cd tool/pages
 /Users/y/toolchains/run node ../../node_modules/wrangler/bin/wrangler.js pages deploy --project-name optionkiller --branch 1.0 --commit-dirty=true
 ```
 
-先执行 web 构建。本地 Pages 迁移配置计划直接绑定原有 D1 数据库；等待 Cloudflare 授权恢复、配置 QQ_SMTP_PASS 并验证后再部署。线上现状仍通过 Worker 服务绑定。
+先执行 web 构建。Pages 已直接绑定原有 D1 数据库，后端随 Pages 部署；QQ_SMTP_PASS 在 Pages 生产环境中作为秘密变量保存。Git 构建命令为 `node tool/pages/prepare.mjs --ci`，输出目录为 `site-build`。

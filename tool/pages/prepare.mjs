@@ -1,9 +1,11 @@
 import {cp,mkdir,rm,readFile,writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-const src=path.resolve(fileURLToPath(new URL('../..',import.meta.url))),root=path.dirname(src),out=path.join(root,'.cache/pages-deploy');
+const src=path.resolve(fileURLToPath(new URL('../..',import.meta.url))),root=path.dirname(src),ci=process.argv.includes('--ci');
+if (ci && !process.env.CF_PAGES) throw new Error('CI output is reserved for Cloudflare builds');
+const out=ci ? path.join(src,'site-build') : path.join(root,'.cache/pages-deploy');
 await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
-await cp(path.join(root,'build/latest/dist'),out,{recursive:true});
+await cp(ci ? path.join(src,'web') : path.join(root,'build/latest/dist'),out,{recursive:true});
 const backend=await readFile(path.join(src,'web/_worker.js'),'utf8');
 const redirect="if (!path.startsWith('/api/')) return Response.redirect('https://optionkiller.pages.dev' + path + url.search, 302);";
 if (!backend.includes(redirect)) throw new Error('Expected backend static route not found');

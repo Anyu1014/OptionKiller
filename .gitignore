@@ -24,3 +24,5 @@ android/build/
 # Disposable validation files stay outside the source repository
 /.cache/
 .DS_Store
+
+/site-build/
