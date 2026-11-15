@@ -1450,29 +1450,47 @@
     body.appendChild(textarea);
     body.appendChild(h('p', {
       class: 'import-help',
-      text: '支持单选/A型题与多选/X型题。题干以 1. 开头，A–E 选项可分行或同一行。答案可写在括号内或题后，也可在文末写「参考答案」并按题号列出「1.A 2.AC」。解析可选；无答案的题目可练习，但不判分。PDF/Word/截图提取后请先核对。'
+      text: '支持单选/A型题与多选/X型题。题号后可用点号或空格，例如「04 【S】 幻听」，下一行填写题干；A–E 选项可分行或同一行。支持「答案 | D」和「解析/易错 | 内容」。答案可写在括号内或题后，也可在文末写「参考答案」并按题号列出「1.A 2.AC」。解析可选；无答案的题目可练习，但不判分。PDF/Word/截图提取后请先核对。'
     }));
 
     var preview = h('div', { class: 'import-preview', text: '等待内容…' });
     body.appendChild(preview);
     var checkEnabled = h('input', {type:'checkbox', id:'importAiCheck'});
-    var checkLabel = h('label', {for:'importAiCheck', class:'import-help'}, checkEnabled, ' AI 核对（默认关闭）');
+    var checkLabel = h('label', {for:'importAiCheck', class:'import-help'}, checkEnabled, ' AI 独立识别（默认关闭）');
     body.appendChild(checkLabel);
-    var checkStatus = h('p', {class:'import-help', id:'importAiStatus', text:'开启后会将原始文本及解析结果发送给所选 AI 服务，可能产生费用；图片仅发送提取出的文字，结果请人工核对。'});
+    var checkStatus = h('p', {class:'import-help', id:'importAiStatus', text:'开启后会将原始文本发送给所选 AI 服务独立识别，可能产生费用；图片仅发送提取出的文字，结果请人工核对。'});
     body.appendChild(checkStatus);
     var checkRevision = 0, checkPassed = false;
     function checkImport() {
       var revision=++checkRevision; checkPassed=false;
-      if (!checkEnabled.checked || !parsed || !parsed.cards.length) { updateImportButton(); return; }
-      var config=aiConfig(), raw=textarea.value, formatted=C.questionText(parsed.cards);
+      var raw=textarea.value.trim();
+      if (!checkEnabled.checked || !raw) { updateImportButton(); return; }
+      var deck=store.deckById(select.value), config=(deck && deck.aiConfig) || aiConfig();
       if (!config || !config.model || (!config.key && config.provider !== 'custom')) {checkStatus.textContent='请先在设置的自动解析中配置服务商、模型和 API Key。';updateImportButton();return;}
-      if (raw.length>12000 || formatted.length>24000) {checkStatus.textContent='内容较长，请分批核对，或关闭 AI 核对后导入。';updateImportButton();return;}
-      checkStatus.textContent='AI 正在核对，请稍候…';updateImportButton();
-      var prompt='核对原文与解析结果是否存在遗漏、错分题干选项、答案或题型。只列差异及题号，最多200字；没有发现差异则说明未发现明显差异。不猜答案，不补原文没有的内容。\n原文:\n'+raw+'\n解析结果:\n'+formatted;
-      var work=config.provider==='custom' ? Promise.resolve().then(function(){return customFetch(C.customEndpoints(config.endpoint).chat,config,{model:config.model,messages:[{role:'user',content:prompt}],max_tokens:384});}).then(function(data){var content=data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;if(typeof content!=='string' || !content.trim())throw new Error('AI 未返回核对结果');return {text:content};}) : window.OK_FETCH((window.OK_API_BASE || '')+'/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'import-check',provider:config.provider,key:config.key,model:config.model,question:raw,parsedText:formatted})},40000).then(function(res){return res.json().then(function(data){if(!res.ok)throw new Error(data.error || '核对失败');return data;});});
-      work.then(function(data){if(revision!==checkRevision || !checkEnabled.checked)return; if(typeof data.text!=='string' || !data.text.trim())throw new Error('AI 未返回核对结果');checkPassed=true;checkStatus.textContent='AI 核对：'+data.text.trim().slice(0,1200)+'（AI 结果仅供参考，请对照原始资料）';updateImportButton();}).catch(function(e){if(revision!==checkRevision || !checkEnabled.checked)return;checkStatus.textContent=(e.message || 'AI 核对失败')+'；可重新勾选核对或关闭核对后导入。';updateImportButton();});
+      if (raw.length>12000) {checkStatus.textContent='内容较长，请分批识别，或关闭 AI 识别后导入。';updateImportButton();return;}
+      checkStatus.textContent='AI 正在独立识别，请稍候…';updateImportButton();
+      var prompt=C.importRecognitionPrompt(raw);
+      var work=config.provider==='custom' ? Promise.resolve().then(function(){return customFetch(C.customEndpoints(config.endpoint).chat,config,{model:config.model,messages:[{role:'user',content:prompt}],max_tokens:4096});}).then(function(data){
+        var content=data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+        if(typeof content!=='string' || !content.trim())throw new Error('AI 未返回识别结果');
+        return C.parseImport(content.trim().replace(/^\x60{3}(?:json)?\s*/i,'').replace(/\s*\x60{3}$/,''));
+      }) : window.OK_FETCH((window.OK_API_BASE || '')+'/api/analysis',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'import-recognize',provider:config.provider,key:config.key,model:config.model,question:raw})},40000).then(function(res){return res.json().then(function(data){if(!res.ok)throw new Error(data.error || '识别失败');return C.parseImport(JSON.stringify(data));});});
+      work.then(function(result){
+        if(revision!==checkRevision || !checkEnabled.checked)return;
+        parsed=result; checkPassed=true; showPreview(result);
+        checkStatus.textContent='AI 已独立识别，请对照原文核对题目、答案与解析。';updateImportButton();
+      }).catch(function(e){if(revision!==checkRevision || !checkEnabled.checked)return;parsed=null;checkStatus.textContent=(e.message || 'AI 识别失败')+'；可重新勾选识别或关闭后使用规则导入。';updateImportButton();});
     }
-    checkEnabled.addEventListener('change',function(){if(checkEnabled.checked)checkImport();else{checkRevision++;checkPassed=false;checkStatus.textContent='AI 核对已关闭；不会发送内容。';updateImportButton();}});
+    checkEnabled.addEventListener('change',function(){if(checkEnabled.checked)checkImport();else{checkRevision++;checkPassed=false;checkStatus.textContent='AI 识别已关闭；不会发送内容。';parseNow();}});
+    function showPreview(result) {
+      preview.className = 'import-preview ok';
+      preview.textContent = '可导入 ' + result.cards.length + ' 题（单选 ' + result.cards.filter(function(c){return c.type==="single";}).length + '，多选 ' + result.cards.filter(function(c){return c.type==="multi";}).length + '，待补答案 ' + result.cards.filter(function(c){return !c.answers.length;}).length + '）';
+      var list = h('ul', { class: 'preview-items' });
+      result.cards.slice(0, 3).forEach(function(c){list.appendChild(h('li',{text:c.term+' — '+c.def.replace(/\n/g,' ').slice(0,42)}));});
+      if (result.cards.length > 3) list.appendChild(h('li', { text: '… 还有 ' + (result.cards.length - 3) + ' 条' }));
+      preview.appendChild(list);
+      footInfo.textContent = '将导入 ' + result.cards.length + ' 条';
+    }
 
     function parseNow() {
       var text = textarea.value;
@@ -1488,22 +1506,14 @@
         var nameHint = nameInput.value.trim();
         var result = C.parseImport(text, nameHint);
         parsed = result;
-        preview.className = 'import-preview ok';
-        preview.textContent = '可导入 ' + result.cards.length + ' 题（单选 ' + result.cards.filter(function(c){return c.type==="single";}).length + '，多选 ' + result.cards.filter(function(c){return c.type==="multi";}).length + '，待补答案 ' + result.cards.filter(function(c){return !c.answers.length;}).length + '）';
-        var list = h('ul', { class: 'preview-items' });
-        result.cards.slice(0, 3).forEach(function (c) {
-          list.appendChild(h('li', { text: c.term + ' — ' + c.def.replace(/\n/g, ' ').slice(0, 42) }));
-        });
-        if (result.cards.length > 3) list.appendChild(h('li', { text: '… 还有 ' + (result.cards.length - 3) + ' 条' }));
-        preview.appendChild(list);
-        footInfo.textContent = '将导入 ' + result.cards.length + ' 条';
+        showPreview(result);
       } catch (err) {
         parsed = null;
         preview.className = 'import-preview err';
         preview.textContent = err.message || '解析失败';
         footInfo.textContent = '暂无可导入内容';
       }
-      if (checkEnabled.checked && parsed) checkImport(); else updateImportButton();
+      if (checkEnabled.checked) checkImport(); else updateImportButton();
     }
 
     var importBtn = h('button', {
@@ -1548,7 +1558,7 @@
 
     var debounce = null;
     textarea.addEventListener('input', function () {
-      checkRevision++; checkPassed=false; if (checkEnabled.checked) {checkStatus.textContent='内容已更改，等待重新核对…'; updateImportButton();}
+      checkRevision++; checkPassed=false; if (checkEnabled.checked) {checkStatus.textContent='内容已更改，等待重新识别…'; updateImportButton();}
       if (debounce) clearTimeout(debounce);
       debounce = setTimeout(parseNow, 160);
     });

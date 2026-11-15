@@ -1177,22 +1177,24 @@ async function handleAnalysis(request) {
   need(['openai','deepseek','gemini','doubao'].includes(provider), 400, '请选择支持的服务商');
   need(key.length > 0 && key.length <= 512 && !/[\r\n]/.test(key), 400, 'API Key 格式不正确');
   need(/^[A-Za-z0-9._:-]{1,120}$/.test(model), 400, '模型名称格式不正确');
+  const recognize = input.mode === 'import-recognize';
   const verify = input.mode === 'import-check';
   const parsedText = verify ? String(input.parsedText || '') : '';
-  if (verify) need(question && question.length <= 12000 && parsedText && parsedText.length <= 24000, 400, '核对内容超出长度限制');
+  if (recognize) need(question && question.length <= 12000, 400, '识别内容超出长度限制');
+  else if (verify) need(question && question.length <= 12000 && parsedText && parsedText.length <= 24000, 400, '核对内容超出长度限制');
   else need(question && question.length <= 12000 && options.length >= 2 && options.length <= 5, 400, '题目格式不正确');
   const choices = options.map(o => String(o.label || '') + '. ' + String(o.text || '').slice(0,2000)).join('\n');
   const answer = Array.isArray(input.answers) ? input.answers.filter(x => /^[A-E]$/.test(x)).join('') : '';
   const needExplanation = input.needExplanation !== false;
-  const prompt = verify ? '核对原文与解析结果是否存在遗漏、错分题干选项、答案或题型。只列差异及题号，最多200字；没有发现差异则说明未发现明显差异。不猜答案，不补原文没有的内容。\n原文:\n' + question + '\n解析结果:\n' + parsedText :
+  const prompt = recognize ? globalThis.MJZ.core.importRecognitionPrompt(question) : verify ? '核对原文与解析结果是否存在遗漏、错分题干选项、答案或题型。只列差异及题号，最多200字；没有发现差异则说明未发现明显差异。不猜答案，不补原文没有的内容。\n原文:\n' + question + '\n解析结果:\n' + parsedText :
     globalThis.MJZ.core.analysisPrompt({term:question,options,answers:answer.split('')},needExplanation);
   let url, headers={'content-type':'application/json'}, body;
   if (provider === 'gemini') {
     url='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent';
-    headers['x-goog-api-key']=key; body={contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:verify ? 384 : 640}};
+    headers['x-goog-api-key']=key; body={contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:recognize ? 4096 : verify ? 384 : 640}};
   } else {
     url={openai:'https://api.openai.com/v1/chat/completions',deepseek:'https://api.deepseek.com/chat/completions',doubao:'https://ark.cn-beijing.volces.com/api/v3/chat/completions'}[provider];
-    headers.authorization='Bearer '+key; body={model,messages:[{role:'user',content:prompt}],max_tokens:verify ? 384 : 640};
+    headers.authorization='Bearer '+key; body={model,messages:[{role:'user',content:prompt}],max_tokens:recognize ? 4096 : verify ? 384 : 640};
   }
   let response;
   try { response=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:AbortSignal.timeout(30000)}); }
@@ -1202,6 +1204,10 @@ async function handleAnalysis(request) {
   const text=provider==='gemini' ? result.candidates?.[0]?.content?.parts?.map(p=>p.text || '').join('') : result.choices?.[0]?.message?.content;
   if (typeof text !== 'string' || !text.trim()) return fail(502,'AI 服务未返回解析内容');
   const raw=text.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
+  if (recognize) {
+    try { return json(globalThis.MJZ.core.parseImport(raw)); }
+    catch { return fail(502, 'AI 返回的题目格式不正确或不完整，请分批重试'); }
+  }
   if (verify) return json({text:raw.slice(0,1200)});
   let parsed; try {parsed=JSON.parse(raw);} catch {parsed=null;}
   const explanation=parsed && typeof parsed.e==='string' ? parsed.e.trim().slice(0,1200) : needExplanation ? raw.slice(0,1200) : '';

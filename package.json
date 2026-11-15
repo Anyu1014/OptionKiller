@@ -1,1 +1,1 @@
-{"name":"optionkiller","version":"1.1.0","private":true,"type":"module","scripts":{"start":"bash tool/run.sh dev","test":"bash tool/run.sh test","build":"bash tool/run.sh web","clean":"bash tool/run.sh clean"}}
+{"name":"optionkiller","version":"1.2.0","private":true,"type":"module","scripts":{"start":"bash tool/run.sh dev","test":"bash tool/run.sh test","build":"bash tool/run.sh web","clean":"bash tool/run.sh clean"}}

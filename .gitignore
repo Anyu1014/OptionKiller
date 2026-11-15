@@ -26,3 +26,5 @@ android/build/
 .DS_Store
 
 /site-build/
+
+/android/.gradle-user/

@@ -192,7 +192,7 @@
       if (/^(?:[一二三四五六七八九十]+\s*[,，、.．]\s*)?(?:单项选择题|多项选择题|单选题?|多选题?|A型题?|X型题?)(?=$|[\s(（:：,，、.．/\-])/i.test(line)) {
         finish(); type = /多项|多选|X型/i.test(line) ? 'multi' : 'single'; section = line; return;
       }
-      var question = line.match(/^(?:\((\d+)\)|(\d+)\s*[.、)．])\s*(.+)$/);
+      var question = line.match(/^(?:\((\d+)\)|(\d+)(?:\s*[.、)．]|\s+(?=[\p{Script=Han}【\[])))\s*(.+)$/u);
       if (question) {
         finish();
         var stem = question[3];
@@ -204,19 +204,19 @@
         last = ''; explanation = false; return;
       }
       if (!current) return;
-      var answer = line.match(/^(?:正确答案|参考答案|答案)\s*[:：]\s*(.*)$/);
+      var answer = line.match(/^(?:正确答案|参考答案|答案)\s*[:：|｜]\s*(.*)$/);
       if (answer) {
         var value = answer[1].trim().toUpperCase();
         if (!/^[A-E\s,，、;；]*$/.test(value)) throw new Error('第 ' + current.number + ' 题：答案请只填写 A–E');
         current.answers = value.match(/[A-E]/g) || []; explanation = false; last = ''; return;
       }
-      var meta = line.match(/^(解析|解释|题型|章节|难度|来源|考点)\s*[:：]\s*(.*)$/);
+      var meta = line.match(/^(解析(?:\/易错)?|解释|题型|章节|难度|来源|考点)\s*[:：|｜]\s*(.*)$/);
       if (meta) {
-        var key = {解析:'explanation',解释:'explanation',题型:'type',章节:'section',难度:'difficulty',来源:'source',考点:'topic'}[meta[1]];
+        var key = {解析:'explanation','解析/易错':'explanation',解释:'explanation',题型:'type',章节:'section',难度:'difficulty',来源:'source',考点:'topic'}[meta[1]];
         current[key] = meta[2]; explanation = key === 'explanation'; last = ''; return;
       }
       if (explanation) { current.explanation += '\n' + line; return; }
-      var re = /(?:^|\s+)([A-E])(?:[.、．:：)）]\s*|\s+|$)/g, matches = Array.from(line.matchAll(re));
+      var re = /(?:^|\s+)([A-E])(?:[.、．:：)）]\s*|\s+|(?=[\p{Script=Han}])|$)/gu, matches = Array.from(line.matchAll(re));
       if (matches.length) {
         matches.forEach(function(m,i) {
           var end = i + 1 < matches.length ? matches[i+1].index : line.length;
@@ -242,6 +242,10 @@
       try { validateQuestion(card); } catch(e) { throw new Error('答案汇总第 ' + entry.number + ' 题：' + e.message); }
     });
     return {cards:dedupe(cards), skipped:[]};
+  }
+
+  function importRecognitionPrompt(raw) {
+    return '独立从原文提取所有选择题，保持题干、选项、答案和解析的原意与顺序。不要猜测缺失答案或补造内容。只输出 JSON，格式为 {"cards":[{"term":"题干","type":"single 或 multi","options":[{"label":"A","text":"选项"}],"answers":["A"],"explanation":"解析"}]}；无答案时 answers 为空数组，选项按 A–E 连续排列，题型按原文明示或答案判断。\n原文:\n' + raw;
   }
 
   function parseJSON(raw) {
@@ -598,6 +602,7 @@
     parseText: parseText,
     parseJSON: parseJSON,
     parseImport: parseImport,
+    importRecognitionPrompt: importRecognitionPrompt,
     dedupe: dedupe,
     newSrs: newSrs,
     rate: rate,
