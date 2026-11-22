@@ -16,7 +16,7 @@
 | iOS | [`release/OptionKiller-1.2.ipa`](release/OptionKiller-1.2.ipa) | development 签名，只能装到描述文件登记的设备 |
 | 网页 | [`release/OptionKiller-1.2-web.zip`](release/OptionKiller-1.2-web.zip) | 纯静态包，解压即可用（不含云端账号） |
 
-线上版本：<https://optionkiller.yuanhyu1014.workers.dev>
+线上版本：<https://optionkiller.pages.dev>
 
 ## 功能
 
